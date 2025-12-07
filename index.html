@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agri Khata Manager</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#10b981">
+    <!-- Link to the generated PWA manifest -->
+    <link rel="manifest" href="manifest.json">
+
+
+   <!-- Add icon for desktop/mobile -->
+   <link rel="icon" type="image/png" href="icons/icon-192.png">
+
+   <script>
+     if ("serviceWorker" in navigator) {
+       navigator.serviceWorker.register("service-worker.js")
+       .then(() => console.log("Service Worker Registered"));
+     }
+   </script> 
+    
+    <!-- Tailwind CSS -->
+    <script src="./tailwind.js"></script>
+
+    <!-- jsPDF for PDF Report Generation -->
+    <script src="./jspdf.umd.min.js"></script>
+    <script src="./jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        /* Custom styles for better readability and PWA feel */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0fdf4; /* Light green background */
+        }
+        .scroll-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        /* Custom scrollbar for aesthetics */
+        .scroll-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .scroll-container::-webkit-scrollbar-thumb {
+            background-color: #34d399;
+            border-radius: 4px;
+        }
+        .scroll-container::-webkit-scrollbar-track {
+            background-color: #d1fae5;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 flex flex-col min-h-screen">
+
+    <div id="app" class="max-w-6xl mx-auto flex-grow w-full">
+        
+        <!-- Header & Language Selector -->
+        <header class="mb-8 p-4 bg-emerald-700 text-white rounded-lg shadow-xl">
+            <h1 id="app-title" class="text-3xl font-bold mb-2">Agri Khata Manager (Offline)</h1>
+            <p id="app-subtitle" class="text-emerald-200">Track your farm expenses and schedule spraying reminders locally.</p>
+            <div class="mt-4 flex space-x-2">
+                <button onclick="setLanguage('en')" class="lang-btn bg-emerald-500 hover:bg-emerald-400 font-semibold py-1 px-3 rounded-full text-sm transition duration-150">English</button>
+                <button onclick="setLanguage('hi')" class="lang-btn bg-emerald-500 hover:bg-emerald-400 font-semibold py-1 px-3 rounded-full text-sm transition duration-150">हिन्दी</button>
+                <button onclick="setLanguage('mr')" class="lang-btn bg-emerald-500 hover:bg-emerald-400 font-semibold py-1 px-3 rounded-full text-sm transition duration-150">मराठी</button>
+            </div>
+        </header>
+
+        <main class="grid lg:grid-cols-3 gap-8">
+            
+            <!-- Left Column: Forms -->
+            <div class="lg:col-span-1 space-y-8">
+                
+                <!-- Expense Input Form -->
+                <section class="bg-white p-6 rounded-lg shadow-xl h-fit">
+                    <h2 id="form-heading" class="text-2xl font-semibold text-emerald-800 mb-4">Add New Expense</h2>
+                    <form id="expense-form" class="space-y-4">
+                        
+                        <div>
+                            <label id="label-category" for="category" class="block text-sm font-medium text-gray-700">Expense Category</label>
+                            <select id="category" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-emerald-500 focus:border-emerald-500"></select>
+                        </div>
+
+                        <div>
+                            <label id="label-date" for="date" class="block text-sm font-medium text-gray-700">Date</label>
+                            <input type="date" id="date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-emerald-500 focus:border-emerald-500">
+                        </div>
+
+                        <div>
+                            <label id="label-cost" for="cost" class="block text-sm font-medium text-gray-700">Cost (₹)</label>
+                            <input type="number" id="cost" required min="0.01" step="0.01" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-emerald-500 focus:border-emerald-500" placeholder="e.g. 500.00">
+                        </div>
+
+                        <div>
+                            <label id="label-employee" for="employee" class="block text-sm font-medium text-gray-700">Name of Employ (Optional)</label>
+                            <input type="text" id="employee" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-emerald-500 focus:border-emerald-500" placeholder="Worker's name">
+                        </div>
+
+                        <div>
+                            <label id="label-notes" for="notes" class="block text-sm font-medium text-gray-700">Notes / Details (Optional)</label>
+                            <textarea id="notes" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-emerald-500 focus:border-emerald-500" placeholder="e.g. 2 bags of DAP"></textarea>
+                        </div>
+                        
+                        <button id="submit-btn" type="submit" class="w-full py-3 px-4 border border-transparent rounded-lg shadow-md text-lg font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition duration-150">
+                            Add Expense
+                        </button>
+                        <div id="status-message" class="mt-2 text-center text-sm font-medium text-red-600"></div>
+                    </form>
+                </section>
+
+                <!-- Reminder Input Form -->
+                <section class="bg-white p-6 rounded-lg shadow-xl h-fit border-l-4 border-yellow-500">
+                    <h2 id="reminder-form-heading" class="text-2xl font-semibold text-yellow-700 mb-4">Set Spraying Reminder</h2>
+                    <form id="reminder-form" class="space-y-4">
+                        
+                        <div>
+                            <label id="label-reminder-date" for="reminder-date" class="block text-sm font-medium text-gray-700">Schedule Date</label>
+                            <input type="date" id="reminder-date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-yellow-500 focus:border-yellow-500">
+                        </div>
+
+                        <div>
+                            <label id="label-reminder-details" for="reminder-details" class="block text-sm font-medium text-gray-700">Spraying Details / Note</label>
+                            <textarea id="reminder-details" rows="2" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-yellow-500 focus:border-yellow-500" placeholder="e.g. 2nd round of pesticide for cotton"></textarea>
+                        </div>
+                        
+                        <button id="reminder-submit-btn" type="submit" class="w-full py-3 px-4 border border-transparent rounded-lg shadow-md text-lg font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition duration-150">
+                            Set Reminder
+                        </button>
+                        <div id="reminder-status-message" class="mt-2 text-center text-sm font-medium text-red-600"></div>
+                    </form>
+                </section>
+            </div>
+            
+            <!-- Right Column: Lists -->
+            <div class="lg:col-span-2 space-y-8">
+                
+                <!-- Reminder List -->
+                <section class="bg-white p-6 rounded-lg shadow-xl border-l-4 border-yellow-500">
+                    <h2 id="reminder-list-heading" class="text-2xl font-semibold text-yellow-700 mb-4">Upcoming Spraying Reminders</h2>
+                    <div id="reminder-list" class="space-y-3 scroll-container max-h-56">
+                        <!-- Reminders will be populated here by JavaScript -->
+                    </div>
+                    <div id="no-reminders-message" class="text-center text-gray-500 mt-4 hidden">
+                        No scheduled reminders. Set one now!
+                    </div>
+                </section>
+
+                <!-- Expense List & Summary -->
+                <section class="bg-white p-6 rounded-lg shadow-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 id="list-heading" class="text-2xl font-semibold text-emerald-800">Recent Expenses</h2>
+                        <button onclick="downloadReport()" id="download-btn" class="py-2 px-4 text-sm font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg shadow-md transition duration-150">
+                            Download PDF Report
+                        </button>
+                    </div>
+                    
+                    <div class="mb-4 p-4 bg-emerald-100 rounded-lg border border-emerald-300">
+                        <p class="text-lg font-medium text-emerald-800"><span id="total-text">Total Expenses</span>: <span id="total-cost" class="font-bold text-2xl">₹ 0.00</span></p>
+                    </div>
+                    
+                    <div class="scroll-container">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <th id="th-date" class="px-3 py-3">Date</th>
+                                    <th id="th-category" class="px-3 py-3">Category</th>
+                                    <th id="th-cost" class="px-3 py-3 text-right">Cost (₹)</th>
+                                    <th id="th-employee" class="px-3 py-3 hidden sm:table-cell">Employee</th>
+                                    <th class="px-3 py-3 text-center"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="expense-list" class="bg-white divide-y divide-gray-200">
+                                <!-- Expenses will be populated here by JavaScript -->
+                            </tbody>
+                        </table>
+                        <div id="no-data-message" class="text-center text-gray-500 mt-8 hidden">
+                            No expenses recorded yet. Add one!
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer for Developer Details -->
+    <footer class="mt-8 pt-4 border-t border-gray-200 text-center">
+        <p class="text-sm text-gray-500">
+            Developed by <span class="font-semibold text-emerald-700">Adesh Software Solutions</span>
+        </p>
+    </footer>
+
+    <script>
+        // --- 1. CONFIGURATION AND TRANSLATION ---
+        
+        let expensesData = []; // Cache for expenses
+        let remindersData = []; // Cache for reminders
+        let currentLang = localStorage.getItem('agri_lang') || 'en';
+
+        // Expense Categories and their multilingual names
+        const CATEGORIES = {
+            PLOUGH: { en: 'Ploughing', hi: 'हल चलाना', mr: 'नांगरणी' },
+            ROTAVETOR: { en: 'Rotavator', hi: 'रोटावेटर', mr: 'रोटॅव्हेटर' },
+            SEEDING: { en: 'Seeding/Perni', hi: 'बुवाई/पेरणी', mr: 'पेरणी' },
+            WEEDING: { en: 'Weeding/Dawarni', hi: 'निराई/गुड़ाई', mr: 'डवारणी' },
+            SPRAYING: { en: 'Spraying', hi: 'छिड़काव', mr: 'फवारणी' },
+            FERTILIZER: { en: 'Fertilizer', hi: 'उर्वरक/खाद', mr: 'खत' },
+            LABOUR: { en: 'Labour', hi: 'श्रम/मजदूरी', mr: 'मजुरी' },
+            HARVESTING: { en: 'Harvesting', hi: 'कटाई', mr: 'काढणी' },
+            SEEDS: { en: 'Seeds', hi: 'बीज', mr: 'बियाणे' },
+            OTHER: { en: 'Other', hi: 'अन्य', mr: 'इतर' }
+        };
+
+        // Full UI Translation Map
+        const i18n = {
+            'en': {
+                'app-title': 'Agri Khata Manager (Offline)',
+                'app-subtitle': 'Track your farm expenses and schedule spraying reminders locally.',
+                'form-heading': 'Add New Expense',
+                'label-category': 'Expense Category',
+                'label-date': 'Date',
+                'label-cost': 'Cost (₹)',
+                'label-employee': 'Name of Employ (Optional)',
+                'label-notes': 'Notes / Details (Optional)',
+                'submit-btn': 'Add Expense',
+                'list-heading': 'Recent Expenses',
+                'total-text': 'Total Expenses', 
+                'th-date': 'Date',
+                'th-category': 'Category',
+                'th-cost': 'Cost (₹)',
+                'th-employee': 'Employee',
+                'no-data-message': 'No expenses recorded yet. Add one!',
+                'delete-confirm': 'Are you sure you want to delete this expense?',
+                'delete-btn': 'Delete',
+                'download-btn': 'Download PDF Report',
+
+                // Reminder Translations
+                'reminder-form-heading': 'Set Spraying Reminder',
+                'label-reminder-date': 'Schedule Date',
+                'label-reminder-details': 'Spraying Details / Note',
+                'reminder-submit-btn': 'Set Reminder',
+                'reminder-list-heading': 'Upcoming Spraying Reminders',
+                'no-reminders-message': 'No scheduled reminders. Set one now!',
+                'reminder-mark-complete': 'Done',
+                'reminder-delete': 'Remove',
+                'reminder-date-passed': 'Date Passed',
+            },
+            'hi': {
+                'app-title': 'कृषि खाता प्रबंधक (ऑफ़लाइन)',
+                'app-subtitle': 'अपने खेती के खर्चों को ट्रैक करें और स्थानीय रूप से छिड़काव अनुस्मारक शेड्यूल करें।',
+                'form-heading': 'नया खर्च जोड़ें',
+                'label-category': 'खर्च की श्रेणी',
+                'label-date': 'तिथि',
+                'label-cost': 'लागत (₹)',
+                'label-employee': 'कर्मचारी का नाम (वैकल्पिक)',
+                'label-notes': 'टिप्पणियाँ / विवरण (वैकल्पिक)',
+                'submit-btn': 'खर्च जोड़ें',
+                'list-heading': 'हाल के खर्चे',
+                'total-text': 'कुल खर्चे', 
+                'th-date': 'तिथि',
+                'th-category': 'श्रेणी',
+                'th-cost': 'लागत (₹)',
+                'th-employee': 'कर्मचारी',
+                'no-data-message': 'अभी तक कोई खर्च दर्ज नहीं किया गया है। एक जोड़ें!',
+                'delete-confirm': 'क्या आप वाकई इस खर्च को हटाना चाहते हैं?',
+                'delete-btn': 'हटाएँ',
+                'download-btn': 'PDF रिपोर्ट डाउनलोड करें',
+
+                // Reminder Translations
+                'reminder-form-heading': 'छिड़काव अनुस्मारक सेट करें',
+                'label-reminder-date': 'शेड्यूल तिथि',
+                'label-reminder-details': 'छिड़काव विवरण / नोट',
+                'reminder-submit-btn': 'अनुस्मारक सेट करें',
+                'reminder-list-heading': 'आगामी छिड़काव अनुस्मारक',
+                'no-reminders-message': 'कोई निर्धारित अनुस्मारक नहीं है। अभी एक सेट करें!',
+                'reminder-mark-complete': 'पूरा हुआ',
+                'reminder-delete': 'हटाएँ',
+                'reminder-date-passed': 'तिथि बीत चुकी है',
+            },
+            'mr': {
+                'app-title': 'कृषी खाते व्यवस्थापक (ऑफलाइन)',
+                'app-subtitle': 'तुमच्या शेतीचा खर्च ट्रॅक करा आणि स्थानिक पातळीवर फवारणीसाठी रिमाइंडर्स सेट करा.',
+                'form-heading': 'नवीन खर्च जोडा',
+                'label-category': 'खर्चाची श्रेणी',
+                'label-date': 'दिनांक',
+                'label-cost': 'खर्च (₹)',
+                'label-employee': 'कर्मचारीचे नाव (पर्यायी)',
+                'label-notes': 'टीप / तपशील (पर्यायी)',
+                'submit-btn': 'खर्च जोडा',
+                'list-heading': 'मागील खर्च',
+                'total-text': 'एकूण खर्च', 
+                'th-date': 'दिनांक',
+                'th-category': 'श्रेणी',
+                'th-cost': 'खर्च (₹)',
+                'th-employee': 'कर्मचारी',
+                'no-data-message': 'अद्याप कोणताही खर्च नोंदवला नाही. एक जोडा!',
+                'delete-confirm': 'तुम्हाला हा खर्च नक्कीच काढायचा आहे का?',
+                'delete-btn': 'काढा',
+                'download-btn': 'PDF अहवाल डाउनलोड करा',
+
+                // Reminder Translations
+                'reminder-form-heading': 'फवारणीची आठवण सेट करा',
+                'label-reminder-date': 'शेड्यूलची तारीख',
+                'label-reminder-details': 'फवारणी तपशील / टीप',
+                'reminder-submit-btn': 'आठवण सेट करा',
+                'reminder-list-heading': 'आगामी फवारणीच्या आठवणी',
+                'no-reminders-message': 'कोणतीही आठवण सेट केलेली नाही. आता एक सेट करा!',
+                'reminder-mark-complete': 'पूर्ण',
+                'reminder-delete': 'काढा',
+                'reminder-date-passed': 'तारीख निघून गेली',
+            }
+        };
+
+        // --- 2. LOCAL STORAGE UTILITIES ---
+
+        /**
+         * Loads data from localStorage.
+         * @param {string} key The localStorage key.
+         * @returns {Array<Object>} Parsed array or empty array if none exists.
+         */
+        function loadData(key) {
+            const data = localStorage.getItem(key);
+            try {
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                console.error(`Error parsing data from localStorage key "${key}".`, e);
+                return [];
+            }
+        }
+
+        /**
+         * Saves data to localStorage.
+         * @param {string} key The localStorage key.
+         * @param {Array<Object>} data The data array to save.
+         */
+        function saveData(key, data) {
+            localStorage.setItem(key, JSON.stringify(data));
+        }
+
+        // --- 3. EXPENSE LOGIC ---
+        
+        /**
+         * Adds a new expense record to localStorage.
+         * @param {Object} expense The expense object.
+         */
+        function addExpense(expense) {
+            const expenses = loadData('agri_expenses');
+            // Use timestamp as a unique ID
+            expense.id = Date.now();
+            expenses.push(expense);
+            saveData('agri_expenses', expenses);
+            renderExpenses();
+        }
+
+        /**
+         * Deletes an expense record by ID.
+         * @param {number} id The ID of the expense to delete.
+         */
+        function deleteExpense(id) {
+            let expenses = loadData('agri_expenses');
+            expenses = expenses.filter(exp => exp.id !== id);
+            saveData('agri_expenses', expenses);
+            renderExpenses();
+        }
+
+        /**
+         * Renders the list of expenses and updates the total cost.
+         */
+        function renderExpenses() {
+            let expenses = loadData('agri_expenses');
+            // Sort expenses by date (newest first)
+            expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            expensesData = expenses; // Cache for PDF generation
+
+            const listElement = document.getElementById('expense-list');
+            const totalCostElement = document.getElementById('total-cost');
+            const noDataMessage = document.getElementById('no-data-message');
+            
+            if (!listElement || !totalCostElement || !noDataMessage) return;
+
+            listElement.innerHTML = '';
+            let total = 0;
+            const lang = currentLang;
+
+            if (expenses.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                totalCostElement.textContent = `₹ 0.00`;
+                return;
+            } else {
+                noDataMessage.classList.add('hidden');
+            }
+
+            expenses.forEach(expense => {
+                total += expense.cost;
+
+                const categoryText = CATEGORIES[expense.category] ? CATEGORIES[expense.category][lang] : expense.category;
+                const deleteBtnText = i18n[lang]['delete-btn'];
+
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition duration-150';
+                row.innerHTML = `
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${expense.date}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-emerald-600">${categoryText}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-bold text-gray-900 text-right">₹ ${expense.cost.toFixed(2)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">${expense.employee || '-'}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
+                        <button onclick="handleDeleteExpense(${expense.id})" class="text-red-600 hover:text-red-900 transition duration-150 p-1 rounded-full hover:bg-red-100">
+                            ${deleteBtnText}
+                        </button>
+                    </td>
+                `;
+                listElement.appendChild(row);
+            });
+
+            totalCostElement.textContent = `₹ ${total.toFixed(2)}`;
+        }
+        
+        /**
+         * Handles form submission to add a new expense.
+         * @param {Event} e 
+         */
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const statusMessage = document.getElementById('status-message');
+
+            const newExpense = {
+                date: form.date.value,
+                category: form.category.value,
+                cost: parseFloat(form.cost.value),
+                employee: form.employee.value.trim(),
+                notes: form.notes.value.trim(),
+                timestamp: Date.now()
+            };
+
+            try {
+                addExpense(newExpense);
+                form.reset();
+                document.getElementById('category').value = ''; 
+                statusMessage.textContent = 'Expense added successfully!';
+                statusMessage.className = 'mt-2 text-center text-sm font-medium text-emerald-600';
+            } catch (error) {
+                console.error("Error adding expense:", error);
+                statusMessage.textContent = 'Failed to add expense.';
+                statusMessage.className = 'mt-2 text-center text-sm font-medium text-red-600';
+            }
+            setTimeout(() => statusMessage.textContent = '', 3000); 
+        }
+
+        /**
+         * Handles the deletion of an expense.
+         * @param {number} id 
+         */
+        function handleDeleteExpense(id) {
+             const statusMessage = document.getElementById('status-message');
+             // Using simple status update instead of forbidden window.confirm
+             statusMessage.textContent = i18n[currentLang]['delete-confirm'];
+             statusMessage.className = 'mt-2 text-center text-sm font-medium text-amber-600';
+
+             // Add visual confirmation flow
+             const itemToRemove = expensesData.find(exp => exp.id === id);
+             if (itemToRemove) {
+                 setTimeout(() => {
+                    deleteExpense(id);
+                    statusMessage.textContent = 'Expense deleted.';
+                    statusMessage.className = 'mt-2 text-center text-sm font-medium text-emerald-600';
+                    setTimeout(() => statusMessage.textContent = '', 3000);
+                 }, 500); // Small delay to show confirmation message
+             } else {
+                statusMessage.textContent = 'Error: Expense not found.';
+                statusMessage.className = 'mt-2 text-center text-sm font-medium text-red-600';
+                setTimeout(() => statusMessage.textContent = '', 3000);
+             }
+        }
+
+
+        // --- 4. REMINDER LOGIC ---
+
+        /**
+         * Adds a new reminder record to localStorage.
+         * @param {Object} reminder The reminder object.
+         */
+        function addReminder(reminder) {
+            const reminders = loadData('agri_reminders');
+            // Use timestamp as a unique ID
+            reminder.id = Date.now();
+            reminder.isComplete = false;
+            reminders.push(reminder);
+            saveData('agri_reminders', reminders);
+            renderReminders();
+        }
+
+        /**
+         * Updates the status of a reminder.
+         * @param {number} id The ID of the reminder.
+         * @param {boolean} isComplete New completion status.
+         */
+        function updateReminderStatus(id, isComplete) {
+            let reminders = loadData('agri_reminders');
+            const reminderIndex = reminders.findIndex(rem => rem.id === id);
+            if (reminderIndex !== -1) {
+                reminders[reminderIndex].isComplete = isComplete;
+                saveData('agri_reminders', reminders);
+                renderReminders();
+            }
+        }
+        
+        /**
+         * Deletes a reminder record by ID.
+         * @param {number} id The ID of the reminder to delete.
+         */
+        function deleteReminder(id) {
+            let reminders = loadData('agri_reminders');
+            reminders = reminders.filter(rem => rem.id !== id);
+            saveData('agri_reminders', reminders);
+            renderReminders();
+        }
+
+        /**
+         * Renders the list of upcoming reminders.
+         */
+        function renderReminders() {
+            let reminders = loadData('agri_reminders');
+            remindersData = reminders;
+            const listElement = document.getElementById('reminder-list');
+            const noDataMessage = document.getElementById('no-reminders-message');
+            
+            if (!listElement || !noDataMessage) return;
+
+            // Filter for incomplete, sort by date (oldest first)
+            const upcomingReminders = reminders
+                .filter(rem => !rem.isComplete)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            listElement.innerHTML = '';
+            const lang = currentLang;
+
+            if (upcomingReminders.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                return;
+            } else {
+                noDataMessage.classList.add('hidden');
+            }
+            
+            const today = new Date().toISOString().split('T')[0];
+
+            upcomingReminders.forEach(reminder => {
+                const isOverdue = reminder.date < today;
+                const dateStatusClass = isOverdue ? 'text-red-600 font-bold' : 'text-yellow-700 font-bold';
+                const dateText = isOverdue ? `${reminder.date} (${i18n[lang]['reminder-date-passed']})` : reminder.date;
+
+                const item = document.createElement('div');
+                item.className = `p-4 rounded-lg shadow-md ${isOverdue ? 'bg-red-100' : 'bg-yellow-50'} border-l-4 ${isOverdue ? 'border-red-500' : 'border-yellow-500'} flex justify-between items-start`;
+                
+                item.innerHTML = `
+                    <div>
+                        <p class="${dateStatusClass}">${dateText}</p>
+                        <p class="text-sm text-gray-700 mt-1">${reminder.details}</p>
+                    </div>
+                    <div class="flex space-x-2 mt-1 flex-shrink-0">
+                        <button onclick="updateReminderStatus(${reminder.id}, true)" class="text-xs text-white bg-green-500 hover:bg-green-600 py-1 px-3 rounded transition duration-150">
+                            ${i18n[lang]['reminder-mark-complete']}
+                        </button>
+                        <button onclick="deleteReminder(${reminder.id})" class="text-xs text-gray-500 hover:text-red-600 py-1 px-3 rounded border border-gray-300 hover:border-red-500 transition duration-150">
+                            ${i18n[lang]['reminder-delete']}
+                        </button>
+                    </div>
+                `;
+                listElement.appendChild(item);
+            });
+        }
+
+        /**
+         * Handles form submission to add a new reminder.
+         * @param {Event} e 
+         */
+        function handleReminderFormSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const statusMessage = document.getElementById('reminder-status-message');
+
+            const newReminder = {
+                date: form['reminder-date'].value,
+                details: form['reminder-details'].value.trim(),
+            };
+            
+            try {
+                addReminder(newReminder);
+                form.reset();
+                statusMessage.textContent = 'Reminder set successfully!';
+                statusMessage.className = 'mt-2 text-center text-sm font-medium text-yellow-600';
+            } catch (error) {
+                console.error("Error setting reminder:", error);
+                statusMessage.textContent = 'Failed to set reminder.';
+                statusMessage.className = 'mt-2 text-center text-sm font-medium text-red-600';
+            }
+            setTimeout(() => statusMessage.textContent = '', 3000); 
+        }
+
+        // --- 5. REPORT GENERATION ---
+
+        /**
+         * Downloads a PDF report of the current expenses.
+         */
+        function downloadReport() {
+            if (expensesData.length === 0) {
+                // Using a message box instead of alert()
+                document.getElementById('status-message').textContent = "Cannot generate report: No expenses recorded.";
+                document.getElementById('status-message').className = 'mt-2 text-center text-sm font-medium text-red-600';
+                setTimeout(() => document.getElementById('status-message').textContent = '', 3000);
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const lang = currentLang;
+            const translations = i18n[lang];
+
+            doc.setFontSize(22);
+            doc.text(translations['app-title'], 14, 20);
+
+            doc.setFontSize(14);
+            doc.text(translations['list-heading'], 14, 30);
+            
+            // Prepare table data
+            const headers = [
+                translations['th-date'],
+                translations['th-category'],
+                translations['th-employee'],
+                translations['label-notes'],
+                translations['th-cost']
+            ];
+
+            let totalCost = 0;
+            const data = expensesData.map(expense => {
+                totalCost += expense.cost;
+                const categoryText = CATEGORIES[expense.category] ? CATEGORIES[expense.category][lang] : expense.category;
+                return [
+                    expense.date,
+                    categoryText,
+                    expense.employee || '-',
+                    expense.notes || '-',
+                    `₹ ${expense.cost.toFixed(2)}`
+                ];
+            });
+
+            // Add table
+            doc.autoTable({
+                startY: 35,
+                head: [headers],
+                body: data,
+                theme: 'striped',
+                headStyles: { fillColor: [16, 185, 129] }, // Emerald color
+                columnStyles: {
+                    4: { cellWidth: 20, halign: 'right' }
+                }
+            });
+
+            // Add Total Cost
+            let finalY = doc.lastAutoTable.finalY + 10;
+            doc.setFontSize(16);
+            doc.text(`${translations['total-text']}: ₹ ${totalCost.toFixed(2)}`, 14, finalY);
+
+            // Add developer info
+            finalY += 8;
+            doc.setFontSize(10);
+            doc.text(`Report generated by Agri Khata Manager. Developed by Adesh Software Solutions.`, 14, finalY);
+
+            // Save the PDF
+            doc.save('agri_khata_report.pdf');
+        }
+
+
+        // --- 6. UI UPDATE AND INITIALIZATION ---
+
+        /**
+         * Updates all UI elements with the selected language.
+         * @param {string} lang The language code ('en', 'hi', 'mr').
+         */
+        function updateUI(lang) {
+            const translations = i18n[lang];
+
+            // Update text content for all elements
+            const elements = document.querySelectorAll('[id]');
+            elements.forEach(element => {
+                const key = element.id;
+                if (translations[key]) {
+                    element.textContent = translations[key];
+                }
+            });
+            
+            // Special handling for the Total Expenses label (which has a span inside it)
+            const totalTextElement = document.getElementById('total-text');
+            if(totalTextElement) {
+                totalTextElement.textContent = translations['total-text'];
+            }
+
+            // Update Expense Categories dropdown
+            const categorySelect = document.getElementById('category');
+            categorySelect.innerHTML = ''; 
+            
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = translations['label-category'];
+            defaultOption.disabled = true;
+            defaultOption.selected = true;
+            categorySelect.appendChild(defaultOption);
+
+            for (const key in CATEGORIES) {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = CATEGORIES[key][lang];
+                categorySelect.appendChild(option);
+            }
+
+            // Re-render lists to update category/text translations
+            renderExpenses();
+            renderReminders();
+        }
+
+        /**
+         * Sets the global language and updates the UI.
+         * @param {string} lang 
+         */
+        function setLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('agri_lang', lang);
+            updateUI(lang);
+        }
+
+        /**
+         * Main initialization function.
+         */
+        function init() {
+            // Register service worker for PWA functionality
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('./service-worker.js')
+                        .then(registration => {
+                            console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                        })
+                        .catch(err => {
+                            console.log('ServiceWorker registration failed: ', err);
+                        });
+                });
+            }
+
+            // Set initial language and update UI
+            setLanguage(currentLang);
+            
+            // Set today's date as default for forms
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('date').value = today;
+            document.getElementById('reminder-date').value = today;
+
+
+            // Attach form listeners
+            document.getElementById('expense-form').addEventListener('submit', handleFormSubmit);
+            document.getElementById('reminder-form').addEventListener('submit', handleReminderFormSubmit);
+
+            // Load and render initial data
+            renderExpenses();
+            renderReminders();
+        }
+        
+        // Start the application
+        window.onload = init;
+
+        // Expose functions globally for HTML event handlers
+        window.setLanguage = setLanguage;
+        window.handleDeleteExpense = handleDeleteExpense;
+        window.deleteReminder = deleteReminder;
+        window.updateReminderStatus = updateReminderStatus;
+        window.downloadReport = downloadReport;
+
+    </script>
+</body>
+</html>
